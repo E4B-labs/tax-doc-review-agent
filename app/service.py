@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -20,19 +21,21 @@ class DocumentService:
         self.graph = build_graph(checkpointer, extractor)
 
     async def start(self, thread_id: str, content: str | dict[str, Any]) -> dict[str, Any]:
-        return await self.graph.ainvoke(
+        return await asyncio.to_thread(
+            self.graph.invoke,
             {"document_id": thread_id, "document": content},
             config=_config(thread_id),
         )
 
     async def review(self, thread_id: str, approved: bool, edits: dict[str, Any]) -> dict[str, Any]:
-        return await self.graph.ainvoke(
+        return await asyncio.to_thread(
+            self.graph.invoke,
             Command(resume={"approved": approved, "edits": edits}),
             config=_config(thread_id),
         )
 
     async def snapshot(self, thread_id: str) -> dict[str, Any]:
-        snapshot = await self.graph.aget_state(_config(thread_id))
+        snapshot = await asyncio.to_thread(self.graph.get_state, _config(thread_id))
         state = dict(snapshot.values)
         interrupts = [interrupt.value for task in snapshot.tasks for interrupt in task.interrupts]
         if not state and not interrupts:

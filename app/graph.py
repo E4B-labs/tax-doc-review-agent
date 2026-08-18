@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
-from collections.abc import Awaitable, Callable
 from typing import Any, TypedDict
 from uuid import uuid4
 
@@ -46,9 +46,9 @@ def _ingest(state: TaxState) -> dict[str, Any]:
     }
 
 
-def _extract(extractor: Extractor) -> Callable[[TaxState], Awaitable[dict[str, Any]]]:
-    async def node(state: TaxState) -> dict[str, Any]:
-        invoice = await extractor.ainvoke(state["normalized_document"])
+def _extract(extractor: Extractor) -> Any:
+    def node(state: TaxState) -> dict[str, Any]:
+        invoice = asyncio.run(extractor.ainvoke(state["normalized_document"]))
         if not isinstance(invoice, InvoiceFields):
             invoice = InvoiceFields.model_validate(invoice)
         return {"invoice": invoice.model_dump(mode="json"), "status": "extracted"}
@@ -56,9 +56,9 @@ def _extract(extractor: Extractor) -> Callable[[TaxState], Awaitable[dict[str, A
     return node
 
 
-async def _validate(state: TaxState) -> dict[str, Any]:
+def _validate(state: TaxState) -> dict[str, Any]:
     invoice = InvoiceFields.model_validate(state["invoice"])
-    mcp_results = await validate_with_mcp(invoice)
+    mcp_results = asyncio.run(validate_with_mcp(invoice))
     date_result = date_check(invoice.date)
     reasons: list[str] = []
     for result in (*mcp_results.values(), date_result):
@@ -135,7 +135,7 @@ def build_graph(checkpointer: BaseCheckpointSaver, extractor: Extractor | None =
     extractor = extractor or build_extractor()
     workflow = StateGraph(TaxState)
     workflow.add_node("ingest", _ingest)
-    workflow.add_node("extract", _extract(extractor))  # type: ignore[arg-type]
+    workflow.add_node("extract", _extract(extractor))
     workflow.add_node("validate", _validate)
     workflow.add_node("route", lambda state: {})
     workflow.add_node("human_review", _human_review)
