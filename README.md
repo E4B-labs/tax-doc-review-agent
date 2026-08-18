@@ -1,5 +1,7 @@
 # tax-doc-review-agent
 
+**English** | [Polski](README.pl.md)
+
 Production-style reference agent for ingesting expense documents, validating Polish tax fields, pausing for human approval, and posting approved invoices to a ledger.
 
 ## What this demonstrates
